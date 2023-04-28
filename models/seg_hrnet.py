@@ -435,6 +435,7 @@ class HighResolutionNet(nn.Module):
                 nn.init.constant_(m.bias, 0)
         if os.path.isfile(pretrained):
             pretrained_dict = torch.load(pretrained)
+            # pretrained_dict = torch.load(pretrained, map_location="cpu")
             print('=> loading HRNet pretrained model {}'.format(pretrained))
             model_dict = self.state_dict()
             pretrained_dict_used = {}

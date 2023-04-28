@@ -18,11 +18,13 @@ from utils.load_vdata import TestData
 
 device_ids = [Id for Id in range(torch.cuda.device_count())]
 device = torch.device('cuda:0')
+# device = torch.device('cpu')
 
 
 def load_network_weight(net, checkpoint_dir, name):
     weight_path = '{}/{}.pth'.format(checkpoint_dir, name)
     net_state_dict = torch.load(weight_path, map_location='cuda:0')
+    # net_state_dict = torch.load(weight_path, map_location='cpu')
     net.load_state_dict(net_state_dict)
     print('{} weight-loading succeeds'.format(name))
 
