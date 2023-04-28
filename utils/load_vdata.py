@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torch.utils.data as data
 import torch
-import imageio
+from PIL import Image, ImageOps
 
 
 class TestData(data.Dataset):
@@ -41,7 +41,9 @@ class TestData(data.Dataset):
         image_name = self.image_names[index]
         cls = self.image_class[index]
 
-        image = imageio.imread(image_name)
+        with Image.open(image_name) as img:
+            img.thumbnail((1024, 1024))
+            image = np.array(img)
 
         if image.shape[-1] == 4:
             image = self.rgba2rgb(image)
