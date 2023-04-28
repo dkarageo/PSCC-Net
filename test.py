@@ -1,3 +1,7 @@
+import csv
+import pathlib
+from typing import Any, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -59,6 +63,8 @@ def test(args):
     test_data_loader = DataLoader(TestData(args), batch_size=1, shuffle=False,
                                   num_workers=8)
 
+    detection_results: list[dict[str, Any]] = []
+
     for batch_id, test_data in enumerate(test_data_loader):
 
         image, cls, name = test_data
@@ -74,8 +80,8 @@ def test(args):
             SegNet.eval()
             pred_mask = SegNet(feat)[0]
 
-            pred_mask = F.interpolate(pred_mask, size=(image.size(2), image.size(3)), mode='bilinear',
-                                      align_corners=True)
+            pred_mask = F.interpolate(pred_mask, size=(image.size(2), image.size(3)),
+                                      mode='bilinear', align_corners=True)
 
             # classification head
             ClsNet.eval()
@@ -89,11 +95,37 @@ def test(args):
         pred_tag = 'forged' if binary_cls.item() == 1 else 'authentic'
 
         if args.save_tag:
+            detection_results.append({
+                "image": pathlib.Path(name[0]).name,
+                "psccnet_detection": pred_logit[0, 1].detach().cpu().item()
+            })
             save_image(pred_mask, name, 'mask')
 
         print_name = name[0].split('/')[-1].split('.')[0]
-
         print(f'The image {print_name} is {pred_tag}')
+
+        # Clear PyTorch cache for the next sample.
+        torch.cuda.empty_cache()
+
+    if args.save_tag:
+        write_csv_file(detection_results, pathlib.Path("mask_results/detection_results.csv"))
+
+
+def write_csv_file(
+    data: list[dict[str, Any]],
+    output_file: pathlib.Path,
+    fieldnames: Optional[list[str]] = None
+) -> None:
+    with output_file.open("w") as f:
+        if not fieldnames:
+            fieldnames = data[0].keys()
+        writer: csv.DictWriter = csv.DictWriter(f,
+                                                fieldnames=fieldnames,
+                                                delimiter=",",
+                                                extrasaction="ignore")
+        writer.writeheader()
+        for r in data:
+            writer.writerow(r)
 
 
 if __name__ == '__main__':
