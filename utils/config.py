@@ -12,7 +12,7 @@ pscc_args.lr_decay_step = pscc_args.num_epochs // pscc_args.learning_step
 pscc_args.crop_size = [256, 256]
 pscc_args.val_num = 200
 
-pscc_args.save_tag = False
+pscc_args.save_tag = True
 
 pscc_args.train_bs = 10
 pscc_args.val_bs = 1
