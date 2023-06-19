@@ -1,4 +1,6 @@
 import os
+import pathlib
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -305,7 +307,7 @@ def validation(FENet, SegNet, ClsNet, args):
         cls_total += int(torch.ones_like(cls).sum().item())
 
         if args['save_tag']:
-            save_image(pred_mask, name, 'mask')
+            save_image(pred_mask, name, pathlib.Path('./mask_results'))
     return (seg_correct / seg_total + cls_correct / cls_total) / 2
 
 

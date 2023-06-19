@@ -1,4 +1,5 @@
 import os
+import pathlib
 
 import numpy as np
 import torch.utils.data as data
@@ -7,10 +8,14 @@ from PIL import Image, ImageOps
 
 
 class TestData(data.Dataset):
-    def __init__(self, args):
+    def __init__(
+        self,
+        args,
+        input_dir: pathlib.Path = pathlib.Path('./sample')
+    ):
         super(TestData, self).__init__()
 
-        ddir = './sample'
+        ddir = str(input_dir)
         names = os.listdir(ddir)
         authentic_names = [os.path.join(ddir, name) for name in names if 'authentic' in name]
         authentic_class = [0] * len(authentic_names)

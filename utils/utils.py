@@ -1,4 +1,5 @@
 import os
+import pathlib
 
 import torch
 import torchvision.utils as tv_utils
@@ -12,16 +13,18 @@ def adjust_learning_rate(optimizer, epoch, lr_strategy, lr_decay_step):
         print('Learning rate sets to {}.'.format(param_group['lr']))
 
 
-def save_image(image, image_name, category):
-    images = torch.split(image, 1, dim=0)
-    batch_num = len(images)
+def save_image(
+    image: torch.Tensor,
+    image_name: list[str],
+    output_dir: pathlib.Path
+) -> None:
+    images: list[torch.Tensor] = torch.split(image, 1, dim=0)
+    batch_num: int = len(images)
+
+    output_dir.mkdir(exist_ok=True, parents=True)
 
     for ind in range(batch_num):
-        save_dir = './{}_results/'.format(category)
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-        save_path = './{}_results/{}'.format(category, image_name[ind].split('/')[-1][:-3] + 'png')
+        save_path: pathlib.Path = output_dir / f'{pathlib.Path(image_name[ind]).stem}.png'
         tv_utils.save_image(images[ind], save_path)
 
 

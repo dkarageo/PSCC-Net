@@ -2,13 +2,13 @@ import csv
 import pathlib
 from typing import Any, Optional
 
+import click
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from utils.utils import save_image
-
 from models.seg_hrnet import get_seg_model
 from models.seg_hrnet_config import get_hrnet_cfg
 from utils.config import get_pscc_args
@@ -21,6 +21,23 @@ device = torch.device('cuda:0')
 # device = torch.device('cpu')
 
 
+@click.command()
+@click.option("--input_dir",
+              type=click.Path(file_okay=False, exists=True, path_type=pathlib.Path),
+              default="./sample",
+              help="Directory where input images are located.")
+@click.option("--output_dir",
+              type=click.Path(file_okay=False, path_type=pathlib.Path),
+              default="./mask_results",
+              help="Directory where output masks will be written.")
+def cli(
+    input_dir: pathlib.Path,
+    output_dir: pathlib.Path
+) -> None:
+    args = get_pscc_args()
+    test(args, input_dir, output_dir)
+
+
 def load_network_weight(net, checkpoint_dir, name):
     weight_path = '{}/{}.pth'.format(checkpoint_dir, name)
     net_state_dict = torch.load(weight_path, map_location='cuda:0')
@@ -29,7 +46,7 @@ def load_network_weight(net, checkpoint_dir, name):
     print('{} weight-loading succeeds'.format(name))
 
 
-def test(args):
+def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
     # define backbone
     FENet_name = 'HRNet'
     FENet_cfg = get_hrnet_cfg()
@@ -62,8 +79,12 @@ def test(args):
     ClsNet = nn.DataParallel(ClsNet, device_ids=device_ids)
     load_network_weight(ClsNet, ClsNet_checkpoint_dir, ClsNet_name)
 
-    test_data_loader = DataLoader(TestData(args), batch_size=1, shuffle=False,
-                                  num_workers=8)
+    test_data_loader = DataLoader(
+        TestData(args, input_dir),
+        batch_size=1,
+        shuffle=False,
+        num_workers=8
+    )
 
     detection_results: list[dict[str, Any]] = []
 
@@ -101,7 +122,7 @@ def test(args):
                 "image": pathlib.Path(name[0]).name,
                 "psccnet_detection": pred_logit[0, 1].detach().cpu().item()
             })
-            save_image(pred_mask, name, 'mask')
+            save_image(pred_mask, name, output_dir)
 
         print_name = name[0].split('/')[-1].split('.')[0]
         print(f'The image {print_name} is {pred_tag}')
@@ -110,7 +131,7 @@ def test(args):
         torch.cuda.empty_cache()
 
     if args.save_tag:
-        write_csv_file(detection_results, pathlib.Path("mask_results/detection_results.csv"))
+        write_csv_file(detection_results, output_dir/"detection_results.csv")
 
 
 def write_csv_file(
@@ -131,5 +152,4 @@ def write_csv_file(
 
 
 if __name__ == '__main__':
-    args = get_pscc_args()
-    test(args)
+    cli()
