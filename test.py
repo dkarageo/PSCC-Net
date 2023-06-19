@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from utils.utils import save_image
 from models.seg_hrnet import get_seg_model
@@ -79,8 +80,9 @@ def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
     ClsNet = nn.DataParallel(ClsNet, device_ids=device_ids)
     load_network_weight(ClsNet, ClsNet_checkpoint_dir, ClsNet_name)
 
+    test_data = TestData(args, input_dir)
     test_data_loader = DataLoader(
-        TestData(args, input_dir),
+        test_data,
         batch_size=1,
         shuffle=False,
         num_workers=8
@@ -88,7 +90,10 @@ def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
 
     detection_results: list[dict[str, Any]] = []
 
-    for batch_id, test_data in enumerate(test_data_loader):
+    for batch_id, test_data in tqdm(enumerate(test_data_loader),
+                                    desc="Analyzing images",
+                                    unit="image",
+                                    total=len(test_data)):
 
         image, cls, name = test_data
         image = image.to(device)
@@ -124,8 +129,8 @@ def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
             })
             save_image(pred_mask, name, output_dir)
 
-        print_name = name[0].split('/')[-1].split('.')[0]
-        print(f'The image {print_name} is {pred_tag}')
+        # print_name = name[0].split('/')[-1].split('.')[0]
+        # print(f'The image {print_name} is {pred_tag}')
 
         # Clear PyTorch cache for the next sample.
         torch.cuda.empty_cache()
