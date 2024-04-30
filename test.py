@@ -1,5 +1,6 @@
 import csv
 import pathlib
+import timeit
 from typing import Any, Optional
 
 import click
@@ -90,6 +91,9 @@ def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
 
     detection_results: list[dict[str, Any]] = []
 
+    torch.cuda.synchronize()
+    start_time: float = timeit.default_timer()
+
     for batch_id, test_data in tqdm(enumerate(test_data_loader),
                                     desc="Analyzing images",
                                     unit="image",
@@ -134,6 +138,12 @@ def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
 
         # Clear PyTorch cache for the next sample.
         torch.cuda.empty_cache()
+
+    torch.cuda.synchronize()
+    stop_time: float = timeit.default_timer()
+    elapsed_time: float = stop_time - start_time
+    print(f"Total time: {elapsed_time} secs")
+    print(f"Time per image: {elapsed_time / len(test_data)}")
 
     if args.save_tag:
         write_csv_file(detection_results, output_dir/"detection_results.csv")
