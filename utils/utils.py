@@ -1,5 +1,6 @@
 import os
 import pathlib
+from typing import Optional
 
 import torch
 import torchvision.utils as tv_utils
@@ -16,16 +17,26 @@ def adjust_learning_rate(optimizer, epoch, lr_strategy, lr_decay_step):
 def save_image(
     image: torch.Tensor,
     image_name: list[str],
-    output_dir: pathlib.Path
-) -> None:
+    output_dir: pathlib.Path,
+    output_relative_to: Optional[pathlib.Path] = None,
+) -> dict[pathlib.Path, pathlib.Path]:
     images: list[torch.Tensor] = torch.split(image, 1, dim=0)
-    batch_num: int = len(images)
 
-    output_dir.mkdir(exist_ok=True, parents=True)
+    saved_image_paths: dict[pathlib.Path, pathlib.Path] = {}
 
-    for ind in range(batch_num):
-        save_path: pathlib.Path = output_dir / f'{pathlib.Path(image_name[ind]).stem}.png'
-        tv_utils.save_image(images[ind], save_path)
+    for image, image_path in zip(images, image_name):
+        if output_relative_to is None:
+            image_output_dir: pathlib.Path = output_dir
+        else:
+            image_output_dir: pathlib.Path = (
+                output_dir / pathlib.Path(image_path).parent.relative_to(output_relative_to)
+            )
+        image_output_dir.mkdir(exist_ok=True, parents=True)
+        save_path: pathlib.Path = image_output_dir / f'{pathlib.Path(image_path).stem}.png'
+        tv_utils.save_image(image, save_path)
+        saved_image_paths[pathlib.Path(image_path)] = save_path
+
+    return saved_image_paths
 
 
 def findLastCheckpoint(save_dir):

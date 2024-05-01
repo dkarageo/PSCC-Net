@@ -17,6 +17,7 @@ from utils.config import get_pscc_args
 from models.NLCDetection import NLCDetection
 from models.detection_head import DetectionHead
 from utils.load_vdata import TestData
+from utils import csv_utils
 
 device_ids = [Id for Id in range(torch.cuda.device_count())]
 device = torch.device('cuda:0')
@@ -25,19 +26,31 @@ device = torch.device('cuda:0')
 
 @click.command()
 @click.option("--input_dir",
-              type=click.Path(file_okay=False, exists=True, path_type=pathlib.Path),
+              type=click.Path(exists=True, path_type=pathlib.Path),
               default="./sample",
               help="Directory where input images are located.")
 @click.option("--output_dir",
               type=click.Path(file_okay=False, path_type=pathlib.Path),
               default="./mask_results",
               help="Directory where output masks will be written.")
+@click.option("--csv_root_dir", "-r",
+              type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
+              help="Directory to which paths into the provided input CSV file are relative to. "
+                   "This option is only meaningful when the `input_dir` option points to a CSV "
+                   "file.")
+@click.option("--update_input_csv", is_flag=True, default=False,
+              help="When a CSV file is provided as input, providing this flag enables you to "
+                   "update the input CSV, instead of exporting a new one.")
 def cli(
     input_dir: pathlib.Path,
-    output_dir: pathlib.Path
+    output_dir: pathlib.Path,
+    csv_root_dir: Optional[pathlib.Path],
+    update_input_csv: bool
 ) -> None:
     args = get_pscc_args()
-    test(args, input_dir, output_dir)
+    test(args, input_dir, output_dir,
+         csv_root_dir=csv_root_dir,
+         update_input_csv=update_input_csv)
 
 
 def load_network_weight(net, checkpoint_dir, name):
@@ -48,7 +61,13 @@ def load_network_weight(net, checkpoint_dir, name):
     print('{} weight-loading succeeds'.format(name))
 
 
-def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
+def test(
+    args,
+    input_dir: pathlib.Path,
+    output_dir: pathlib.Path,
+    csv_root_dir: Optional[pathlib.Path],
+    update_input_csv: bool
+) -> None:
     # define backbone
     FENet_name = 'HRNet'
     FENet_cfg = get_hrnet_cfg()
@@ -81,7 +100,7 @@ def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
     ClsNet = nn.DataParallel(ClsNet, device_ids=device_ids)
     load_network_weight(ClsNet, ClsNet_checkpoint_dir, ClsNet_name)
 
-    test_data = TestData(args, input_dir)
+    test_data = TestData(args, input_dir, csv_root_dir=csv_root_dir)
     test_data_loader = DataLoader(
         test_data,
         batch_size=1,
@@ -90,6 +109,8 @@ def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
     )
 
     detection_results: list[dict[str, Any]] = []
+    localization_masks: dict[pathlib.Path, pathlib.Path] = {}
+    detection_scores: dict[pathlib.Path, float] = {}
 
     torch.cuda.synchronize()
     start_time: float = timeit.default_timer()
@@ -131,7 +152,11 @@ def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
                 "image": pathlib.Path(name[0]).name,
                 "psccnet_detection": pred_logit[0, 1].detach().cpu().item()
             })
-            save_image(pred_mask, name, output_dir)
+            batch_loc_masks: dict[pathlib.Path, pathlib.Path] = save_image(
+                pred_mask, name, output_dir, output_relative_to=csv_root_dir
+            )
+            localization_masks.update(batch_loc_masks)
+            detection_scores[pathlib.Path(name[0])] = pred_logit[0, 1].detach().cpu().item()
 
         # print_name = name[0].split('/')[-1].split('.')[0]
         # print(f'The image {print_name} is {pred_tag}')
@@ -147,6 +172,15 @@ def test(args, input_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
 
     if args.save_tag:
         write_csv_file(detection_results, output_dir/"detection_results.csv")
+
+    if input_dir.is_file() and update_input_csv:
+        out_data: csv_utils.AlgorithmOutputData = csv_utils.AlgorithmOutputData(
+            tampered=localization_masks,
+            untampered=None,
+            response_times=None,
+            image_level_predictions=detection_scores
+        )
+        out_data.save_csv(input_dir, csv_root_dir, output_column="psccnet")
 
 
 def write_csv_file(
